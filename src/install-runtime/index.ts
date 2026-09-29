@@ -25,21 +25,17 @@ export interface RuntimeRequest {
 }
 
 export function resolveRuntimeRequests(inputs: Inputs): RuntimeRequest[] {
-  if (inputs.runtime) {
-    const { name } = inputs.runtime
-    if (inputs.nodeVersionFile && (name !== 'node' || inputs.runtime.version)) {
-      warning(
-        name === 'node'
-          ? '`node-version-file` is ignored because `runtime` already includes a Node.js version.'
-          : `\`node-version-file\` is ignored because \`runtime\` explicitly selects ${name}.`,
-      )
-    }
-    const version = inputs.runtime.version
-      ?? (name === 'node' && inputs.nodeVersionFile ? readNodeVersionFile(inputs) : undefined)
-      ?? readDevEngineVersion(inputs, name)
-      ?? (name === 'node' ? readNodeVersionFile(inputs) : undefined)
-      ?? defaultVersionFor(name)
-    return [{ name, version }]
+  if (inputs.runtimes.length > 0) {
+    warnAboutIgnoredNodeVersionFile(inputs)
+    const readDevEngineVersion = devEngineVersionReader(inputs)
+    return inputs.runtimes.map(({ name, version }) => ({
+      name,
+      version: version
+        ?? (name === 'node' && inputs.nodeVersionFile ? readNodeVersionFile(inputs) : undefined)
+        ?? readDevEngineVersion(name)
+        ?? (name === 'node' ? readNodeVersionFile(inputs) : undefined)
+        ?? defaultVersionFor(name),
+    }))
   }
 
   const runtimes = readDevEngineRuntimes(inputs)
@@ -143,6 +139,20 @@ export function logSkippedRuntime() {
   info('No runtime requested or Node.js version file detected. Skipping runtime install.')
 }
 
+// The `runtime` input is the whole list of what to install, so a version file
+// can only supply the version of a `node` entry that does not carry its own.
+function warnAboutIgnoredNodeVersionFile(inputs: Inputs) {
+  if (!inputs.nodeVersionFile) return
+
+  const node = inputs.runtimes.find(runtime => runtime.name === 'node')
+  if (node && !node.version) return
+  warning(
+    node
+      ? '`node-version-file` is ignored because `runtime` already includes a Node.js version.'
+      : `\`node-version-file\` is ignored because \`runtime\` explicitly selects ${inputs.runtimes.map(runtime => runtime.name).join(' and ')}.`,
+  )
+}
+
 function defaultVersionFor(name: RuntimeName): string {
   return name === 'node' ? 'lts' : 'latest'
 }
@@ -175,9 +185,14 @@ function readDevEngineEntries(inputs: Inputs): DevEngineRuntimeEntry[] {
 
 // Resolve through the deduped list so an explicit `runtime` input picks the
 // same declaration the manifest-driven path would, and warns about the
-// duplicate the same way.
-function readDevEngineVersion(inputs: Inputs, name: RuntimeName): string | undefined {
-  return readDevEngineRuntimes(inputs).find(runtime => runtime.name === name)?.version
+// duplicate the same way. The list is read on first use and kept, so that
+// several entries falling back to the manifest report a duplicate only once.
+function devEngineVersionReader(inputs: Inputs): (name: RuntimeName) => string | undefined {
+  let runtimes: RuntimeRequest[] | undefined
+  return name => {
+    runtimes ??= readDevEngineRuntimes(inputs)
+    return runtimes.find(runtime => runtime.name === name)?.version
+  }
 }
 
 function readDevEngineRuntimes(inputs: Inputs): RuntimeRequest[] {

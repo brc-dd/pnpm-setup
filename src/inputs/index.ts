@@ -2,15 +2,9 @@ import { getBooleanInput, getInput, InputOptions } from '@actions/core'
 import expandTilde from 'expand-tilde'
 import { existsSync } from 'fs'
 import path from 'path'
+import { parseRuntimes, RuntimeInput } from './runtime'
 
-export type RuntimeName = 'node' | 'bun' | 'deno'
-
-const SUPPORTED_RUNTIMES: readonly RuntimeName[] = ['node', 'bun', 'deno']
-
-export interface RuntimeInput {
-  readonly name: RuntimeName
-  readonly version?: string
-}
+export type { RuntimeInput, RuntimeName } from './runtime'
 
 export interface Inputs {
   readonly version?: string
@@ -21,7 +15,8 @@ export interface Inputs {
   readonly workingDirectory: string
   /** The manifest to read config from, relative to GITHUB_WORKSPACE. */
   readonly packageJsonFile: string
-  readonly runtime?: RuntimeInput
+  /** Empty when the `runtime` input is omitted. */
+  readonly runtimes: readonly RuntimeInput[]
   readonly nodeVersionFile?: string | false
   readonly install: boolean
   /** Whether a lockfile must already exist and fully describe the install. */
@@ -31,26 +26,6 @@ export interface Inputs {
 
 const options: InputOptions = {
   required: true,
-}
-
-function parseRuntime(): RuntimeInput | undefined {
-  const raw = getInput('runtime').trim()
-  if (!raw) return undefined
-
-  const atIndex = raw.indexOf('@')
-  const name = (atIndex === -1 ? raw : raw.slice(0, atIndex)).trim()
-  const version = atIndex === -1 ? undefined : raw.slice(atIndex + 1).trim()
-
-  if (!isSupportedRuntime(name)) {
-    throw new Error(
-      `Invalid \`runtime\` input "${raw}". Expected \`<name>\` or \`<name>@<version>\` where name is one of: ${SUPPORTED_RUNTIMES.join(', ')}.`,
-    )
-  }
-  if (version !== undefined && version === '') {
-    throw new Error(`Invalid \`runtime\` input "${raw}". Trailing \`@\` with no version.`)
-  }
-
-  return { name, version }
 }
 
 const MANIFEST_NAMES = ['package.json', 'package.yaml'] as const
@@ -121,16 +96,12 @@ function findManifest(workingDirectory: string): string {
   return path.join(workingDirectory, MANIFEST_NAMES[0])
 }
 
-function isSupportedRuntime(name: string): name is RuntimeName {
-  return (SUPPORTED_RUNTIMES as readonly string[]).includes(name)
-}
-
 export const getInputs = (): Inputs => ({
   version: getInput('version'),
   dest: path.resolve(expandTilde(getInput('dest', options))),
   cache: getBooleanInput('cache'),
   ...resolveProjectPaths(),
-  runtime: parseRuntime(),
+  runtimes: parseRuntimes(getInput('runtime')),
   nodeVersionFile: parseNodeVersionFileInput(),
   install: getBooleanInput('install'),
   requireLockfile: getBooleanInput('require-lockfile'),

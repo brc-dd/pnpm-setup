@@ -20,10 +20,16 @@ inputs:
     default: ~/setup-pnpm
   runtime:
     description: |
-      Runtime to install, in `<name>` or `<name>@<version>` form (matching
-      pnpm's `packageManager` field syntax). Supported names: `node`, `bun`,
-      `deno`. Examples: `node@22`, `node@lts`, `node@^24.4.0`, `bun@latest`,
-      `deno@2`.
+      Runtimes to install, each in `<name>` or `<name>@<version>` form
+      (matching pnpm's `packageManager` field syntax). Supported names:
+      `node`, `bun`, `deno`. Examples: `node@22`, `node@lts`, `node@^24.4.0`,
+      `bun@latest`, `deno@2`.
+
+      Separate several runtimes with spaces or newlines, as in
+      `node@24 bun@latest`. They are installed in the order listed, nothing
+      else is installed, and each runtime can be listed only once. A version
+      range may contain spaces of its own (`node@>=22 <25 bun`): a word
+      starts another runtime only when it begins with a runtime name.
 
       When the version is omitted, the action falls back to the version
       declared in `devEngines.runtime` for the same name, or to `lts` (for
@@ -34,8 +40,7 @@ inputs:
       If this input is omitted entirely, the action installs every runtime in
       `devEngines.runtime` from the project's package.json. In case of duplicates,
       the last declared version wins. Node.js is also installed when a
-      version file supplies its version, unless an explicit Bun or Deno
-      runtime was selected.
+      version file supplies its version.
 
       Whenever a runtime is installed, the action exports
       `PNPM_CONFIG_GLOBAL_SHIMS` with that runtime's context-aware shim
@@ -52,8 +57,8 @@ inputs:
 
       When `runtime` is omitted, this installs Node.js alongside any non-Node
       runtimes declared in `devEngines.runtime`. A version included directly
-      in `runtime` takes precedence, and an explicit Bun or Deno runtime
-      ignores version files. `.tool-versions` uses the first version in its
+      in `runtime` takes precedence, and a `runtime` that does not list
+      `node` ignores version files. `.tool-versions` uses the first version in its
       `node` or `nodejs` entry; automatic detection ignores it without that entry.
     required: false
   cache:

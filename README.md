@@ -15,7 +15,7 @@ When the manifest does not declare Node.js, the action also checks `.node-versio
 `.nvmrc`, and `.tool-versions` in the project directory. Set `node-version-file: false`
 to disable this detection.
 
-Only one version of each runtime can be installed globally. If a runtime name is declared more than once, the action emits a GitHub warning annotation and installs the last declared version while retaining the position of its first declaration.
+Only one version of each runtime can be installed globally. If `devEngines.runtime` declares a runtime name more than once, the action emits a GitHub warning annotation and installs the last declared version while retaining the position of its first declaration. The `runtime` input accepts each runtime only once.
 
 ## Inputs
 
@@ -23,7 +23,7 @@ Only one version of each runtime can be installed globally. If a runtime name is
 |------|-------------|
 | `version` | Version of pnpm to install: an exact version, a semver range (`^12.0.0`), or a dist-tag (`next-12`). Must resolve to v11 or newer. Optional when `packageManager` or `devEngines.packageManager` is set in `package.json`. |
 | `dest` | Where to store pnpm files. Defaults to `~/setup-pnpm`. |
-| `runtime` | Runtime spec, in `<name>` or `<name>@<version>` form (e.g. `node@22`, `node@lts`, `bun@latest`, `deno@2`). Supported names: `node`, `bun`, `deno`. When the version is omitted, falls back to `devEngines.runtime`, then to `lts` (for `node`) / `latest`. Node.js also supports version files with the precedence described below. If the input itself is omitted, installs every entry in `devEngines.runtime` and adds Node.js when a version file supplies it. |
+| `runtime` | One or more runtime specs, separated by spaces or newlines, each in `<name>` or `<name>@<version>` form (e.g. `node@22`, `node@lts`, `bun@latest`, `deno@2`, `node@24 bun`). Supported names: `node`, `bun`, `deno`. When the version is omitted, falls back to `devEngines.runtime`, then to `lts` (for `node`) / `latest`. Node.js also supports version files with the precedence described below. If the input itself is omitted, installs every entry in `devEngines.runtime` and adds Node.js when a version file supplies it. |
 | `node-version-file` | Optional Node.js version file path, relative to `working-directory`. By default, checks `.node-version`, `.nvmrc`, then `.tool-versions` when the manifest does not declare Node.js. Set to `false` to disable file detection. An explicit path overrides the manifest; an explicit version in `runtime` overrides both. |
 | `cache` | Cache the pnpm store directory and restore it before installing the runtimes. Default: `false`. |
 | `cache-dependency-path` | Path(s) to the pnpm lockfile, used to compute the cache key. Relative to `GITHUB_WORKSPACE`. Defaults to `pnpm-lock.yaml` inside `working-directory`. |
@@ -91,7 +91,7 @@ The first detected file wins. Detection does not search parent directories.
 A `.tool-versions` file without a `node` or `nodejs` entry is ignored during
 detection. Invalid detected versions fail setup instead of silently selecting
 another file. If no version source exists, Node.js is not installed unless
-`runtime: node` is set, which defaults to `lts`.
+`runtime` lists `node`, which defaults to `lts`.
 
 To use a different file:
 
@@ -119,8 +119,8 @@ used. Values that pnpm cannot install, such as `system`, `path:...`, and
 `ref:...`, fail the setup step.
 
 When no `runtime` input is present, a file can add Node.js alongside Bun or
-Deno declarations in `devEngines.runtime`. An explicit Bun or Deno `runtime`
-ignores Node.js version files.
+Deno declarations in `devEngines.runtime`. A `runtime` input that does not
+list `node` ignores Node.js version files.
 
 ### Matrix: test on multiple Node versions
 
@@ -150,6 +150,35 @@ jobs:
   with:
     runtime: deno@2
 ```
+
+### Install several runtimes
+
+List them in `runtime`, separated by spaces or newlines:
+
+```yaml
+- uses: pnpm/setup@v3
+  with:
+    runtime: node@24 bun@latest
+```
+
+```yaml
+- uses: pnpm/setup@v3
+  with:
+    runtime: |
+      node@24
+      bun@latest
+      deno
+```
+
+The runtimes are installed in the order listed, and nothing else is: an entry
+in `devEngines.runtime` that `runtime` leaves out is skipped. A runtime
+without a version, like `deno` above, resolves one the same way it does on
+its own — from `devEngines.runtime`, then the default. Each runtime can be
+listed only once.
+
+A version range may contain spaces of its own, as in
+`runtime: node@>=22 <25 bun`. A word starts another runtime only when it
+begins with a runtime name, so the range stays in one piece.
 
 ### A project in a subdirectory
 

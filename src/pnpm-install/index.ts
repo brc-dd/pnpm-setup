@@ -5,7 +5,7 @@ import path from 'path'
 import { Inputs } from '../inputs'
 import { lockfileDir } from './lockfile'
 
-export function runPnpmInstall(inputs: Inputs, runtimeInstalled = Boolean(inputs.runtime)) {
+export function runPnpmInstall(inputs: Inputs, runtimeInstalled = inputs.runtimes.length > 0) {
   const args = ['install']
   if (inputs.requireLockfile) {
     args.push('--frozen-lockfile')
